@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registro fotográfico</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 16px; background:#0f172a; color:#fff; }
+  h2 { text-align:center; margin-top:0; }
+  .card { background:#1e293b; border-radius:12px; padding:16px; margin-top:16px; max-width:480px; margin-left:auto; margin-right:auto; }
+  p { line-height:1.4; }
+  label.boton, button.boton {
+    display:block; width:100%; padding:16px; font-size:16px; border-radius:8px;
+    margin-top:14px; text-align:center; cursor:pointer; font-weight:bold; box-sizing:border-box; border:none;
+  }
+  .btn-selfie { background:#2563eb; color:#fff; }
+  .btn-dni { background:#7c3aed; color:#fff; }
+  .btn-buscar { background:#16a34a; color:#fff; }
+  input[type=file] { display:none; }
+  input[type=text] { width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; margin-top:10px; box-sizing:border-box; }
+  .estado { margin-top:8px; font-size:14px; text-align:center; }
+  .ok { color:#4ade80; font-weight:bold; }
+  .pendiente { color:#facc15; }
+  .error { color:#f87171; }
+  img.preview { width:100%; max-width:320px; border-radius:12px; margin:10px auto 0; display:block; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+  <h2>📸 Registro fotográfico</h2>
+  <div class="card" id="contenido">
+    <p>Cargando...</p>
+  </div>
+
+  <script>
+    // ======================================================
+    // https://script.google.com/macros/s/AKfycbzvM9xm8vadn1q4LAy9oUTixoLO0t_0LTatXkes8gsig8HG6ZDDzrXB5BRXDOT6k1z_zw/exec
+    // ======================================================
+    const API_URL = 'PEGA_AQUI_LA_URL_DE_TU_WEB_APP_TERMINADA_EN_/exec';
+
+    const params = new URLSearchParams(window.location.search);
+    let codigo = params.get('codigo') || '';
+
+    async function llamarApiGet(accion, extra) {
+      const qs = new URLSearchParams({ api: '1', accion: accion, ...extra });
+      const resp = await fetch(API_URL + '?' + qs.toString());
+      return resp.json();
+    }
+
+    async function llamarApiPost(datos) {
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
+        body: JSON.stringify({ api: '1', ...datos })
+      });
+      return resp.json();
+    }
+
+    async function iniciar() {
+      if (codigo) {
+        try {
+          const datos = await llamarApiGet('buscarCodigo', { codigo: codigo });
+          mostrarFormulario(datos);
+        } catch (err) {
+          mostrarErrorCarga(err);
+        }
+      } else {
+        mostrarPantallaDni();
+      }
+    }
+
+    function mostrarPantallaDni() {
+      document.getElementById('contenido').innerHTML = `
+        <p>Escribe el mismo número de DNI que usaste al registrarte, para identificar tu registro.</p>
+        <input type="text" id="dniInput" placeholder="N° DNI" inputmode="numeric">
+        <button class="boton btn-buscar" onclick="buscarPorDni()">Continuar</button>
+        <p id="dniError" class="error hidden"></p>
+      `;
+    }
+
+    async function buscarPorDni() {
+      const dni = document.getElementById('dniInput').value.trim();
+      if (!dni) return;
+      document.getElementById('dniError').classList.add('hidden');
+      try {
+        const datos = await llamarApiGet('buscarDni', { dni: dni });
+        if (datos && datos.error === 'sin_codigo') {
+          document.getElementById('dniError').textContent = 'Tu registro se está procesando todavía. Espera unos segundos y vuelve a intentar.';
+          document.getElementById('dniError').classList.remove('hidden');
+          return;
+        }
+        if (!datos || !datos.codigo) {
+          document.getElementById('dniError').textContent = 'No encontramos ese DNI. Verifica que esté bien escrito.';
+          document.getElementById('dniError').classList.remove('hidden');
+          return;
+        }
+        codigo = datos.codigo;
+        mostrarFormulario(datos);
+      } catch (err) {
+        mostrarErrorCarga(err);
+      }
+    }
+
+    function mostrarErrorCarga(err) {
+      document.getElementById('contenido').innerHTML =
+        '<p class="error">No pudimos verificar tu registro. Error: ' + (err && err.message ? err.message : err) + '</p>';
+    }
+
+    function mostrarFormulario(datos) {
+      if (!datos || !datos.codigo) {
+        document.getElementById('contenido').innerHTML =
+          '<p class="error">Registro no encontrado. Usa el link que recibiste por correo, o verifica tu DNI.</p>';
+        return;
+      }
+      document.getElementById('contenido').innerHTML = `
+        <p>Hola, <b>${datos.nombre}</b>. Estas fotos son <b>opcionales</b> y sirven para agilizar tu ingreso el día del evento — nadie más las verá.</p>
+
+        <label class="boton btn-selfie" for="inputSelfie">🤳 Tomar foto tipo selfie</label>
+        <input type="file" accept="image/*" capture="user" id="inputSelfie" onchange="subir('selfie', this)">
+        <div class="estado" id="estadoSelfie">${datos.tieneSelfie ? '<span class="ok">✔ Ya registrada</span>' : '<span class="pendiente">Pendiente</span>'}</div>
+        <img class="preview hidden" id="previewSelfie">
+
+        <label class="boton btn-dni" for="inputDni">🪪 Tomar foto de tu DNI</label>
+        <input type="file" accept="image/*" capture="environment" id="inputDni" onchange="subir('dni', this)">
+        <div class="estado" id="estadoDni">${datos.tieneDni ? '<span class="ok">✔ Ya registrada</span>' : '<span class="pendiente">Pendiente</span>'}</div>
+        <img class="preview hidden" id="previewDni">
+      `;
+    }
+
+    function subir(tipo, input) {
+      const file = input.files[0];
+      if (!file) return;
+      const estadoEl = document.getElementById(tipo === 'selfie' ? 'estadoSelfie' : 'estadoDni');
+      const previewEl = document.getElementById(tipo === 'selfie' ? 'previewSelfie' : 'previewDni');
+      estadoEl.innerHTML = 'Subiendo...';
+
+      const reader = new FileReader();
+      reader.onload = async function() {
+        previewEl.src = reader.result;
+        previewEl.classList.remove('hidden');
+        try {
+          const r = await llamarApiPost({ accion: 'subirFoto', codigo: codigo, tipo: tipo, base64: reader.result });
+          estadoEl.innerHTML = r.ok ? '<span class="ok">✔ Guardada correctamente</span>' : '<span class="error">' + r.mensaje + '</span>';
+        } catch (err) {
+          estadoEl.innerHTML = '<span class="error">Error al guardar: ' + err.message + '</span>';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>
