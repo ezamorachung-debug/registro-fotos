@@ -33,10 +33,7 @@
   </div>
 
   <script>
-    // ======================================================
-    // https://script.google.com/macros/s/AKfycbzvM9xm8vadn1q4LAy9oUTixoLO0t_0LTatXkes8gsig8HG6ZDDzrXB5BRXDOT6k1z_zw/exec
-    // ======================================================
-    const API_URL = 'PEGA_AQUI_LA_URL_DE_TU_WEB_APP_TERMINADA_EN_/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzvM9xm8vadn1q4LAy9oUTixoLO0t_0LTatXkes8gsig8HG6ZDDzrXB5BRXDOT6k1z_zw/exec';
 
     const params = new URLSearchParams(window.location.search);
     let codigo = params.get('codigo') || '';
@@ -44,16 +41,26 @@
     async function llamarApiGet(accion, extra) {
       const qs = new URLSearchParams({ api: '1', accion: accion, ...extra });
       const resp = await fetch(API_URL + '?' + qs.toString());
-      return resp.json();
+      const texto = await resp.text();
+      try {
+        return JSON.parse(texto);
+      } catch (err) {
+        throw new Error('Respuesta no válida del servidor (primeros 200 caracteres): ' + texto.substring(0, 200));
+      }
     }
 
     async function llamarApiPost(datos) {
       const resp = await fetch(API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ api: '1', ...datos })
       });
-      return resp.json();
+      const texto = await resp.text();
+      try {
+        return JSON.parse(texto);
+      } catch (err) {
+        throw new Error('Respuesta no válida del servidor (primeros 200 caracteres): ' + texto.substring(0, 200));
+      }
     }
 
     async function iniciar() {
